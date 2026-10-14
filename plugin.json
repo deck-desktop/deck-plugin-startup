@@ -1,0 +1,9 @@
+{
+  "id": "startup",
+  "name": "Startup",
+  "description": "Programs to launch when you log in, each within its own days and time window.",
+  "icon": "Rocket",
+  "color": "#34d399",
+  "version": "1.0.0",
+  "minDeck": "0.8.0"
+}
