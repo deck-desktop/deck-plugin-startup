@@ -152,7 +152,7 @@ export default function StartupManager() {
                 >
                   <motion.span
                     layout
-                    className="absolute top-0.5 h-4 w-4 rounded-full bg-white"
+                    className="absolute top-0.5 h-4 w-4 rounded-full bg-[rgb(var(--on-accent-rgb))]"
                     style={{ left: p.Enabled ? "18px" : "2px" }}
                   />
                 </span>
