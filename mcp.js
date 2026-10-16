@@ -1,4 +1,4 @@
-// plugins/startup/src/mcp.ts
+// src/mcp.ts
 function register(server, deck) {
   const { z, ok, weekday, readJson, writeJson, ALL_DAYS } = deck;
   server.tool(
