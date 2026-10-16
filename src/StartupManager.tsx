@@ -3,7 +3,7 @@ import { listen } from "../shim/event.js";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Plus, Trash2, FolderOpen, Check } from "lucide-react";
 import {
-  startupRead, startupWrite, pickExe, listInstalled,
+  configRead, configWrite, pickExe, listInstalled,
   type StartupProgram, type AppProc,
 } from "../shim/bridge.js";
 import { TextInput, TimeInput, DayPicker } from "../shim/ui.js";
@@ -39,7 +39,7 @@ export default function StartupManager() {
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const [running, setRunning] = useState<AppProc[]>([]);
-  const ensureInstalled = () => { if (running.length === 0) listInstalled().then(setRunning).catch(() => {}); };
+  const ensureInstalled = () => { if (running.length === 0) listInstalled().then(setRunning).catch((e) => console.warn("[startup] installed apps load failed", e)); };
   // Last text we read-from / wrote-to disk. Autosave only fires when the list
   // actually differs from this — so loads (mount or config-changed) never echo
   // back a write, and there's no fragile "hydrating" flag race.
@@ -52,7 +52,7 @@ export default function StartupManager() {
   const loadTicket = useRef(0);
   const load = () => {
     const ticket = ++loadTicket.current;
-    return startupRead().then((t) => {
+    return configRead("startup").then((t) => {
       if (ticket !== loadTicket.current) return; // a newer load started; this result is stale
       try {
         const a = JSON.parse(t);
@@ -60,7 +60,7 @@ export default function StartupManager() {
         lastSynced.current = JSON.stringify(arr);
         setList(arr);
       } catch { /* leave current on parse error */ }
-    }).catch(() => { /* leave current */ });
+    }).catch((e) => { console.warn("[startup] list load failed", e); /* leave current */ });
   };
   useEffect(() => {
     load();
@@ -82,7 +82,7 @@ export default function StartupManager() {
       // sees a change they just made silently revert, which reads as "it isn't saving".
       lastSynced.current = cur;
       loadTicket.current++; // invalidate any in-flight load; disk is about to be older than us
-      await startupWrite(JSON.stringify(list, null, 2));
+      await configWrite("startup", JSON.stringify(list, null, 2));
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1400);
     }, 500);
