@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "../shim/event.js";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Plus, Trash2, FolderOpen, Check } from "lucide-react";
+import { ChevronDown, Plus, Trash2, FolderOpen, Check, Power } from "lucide-react";
 import {
   configRead, configWrite, pickExe, listInstalled,
   type StartupProgram, type AppProc,
 } from "../shim/bridge.js";
-import { TextInput, TimeInput, DayPicker } from "../shim/ui.js";
+import { TextInput, TimeInput, DayPicker, Toggle, ConfirmDialog, type ConfirmState } from "../shim/ui.js";
 import { AppCombo } from "./AppCombo";
 import { fmtTime } from "./timeFormat";
 
@@ -55,7 +55,8 @@ export default function StartupManager() {
     return configRead("startup").then((t) => {
       if (ticket !== loadTicket.current) return; // a newer load started; this result is stale
       try {
-        const a = JSON.parse(t);
+        // No file yet reads as nothing: an empty list, and a loaded one, so the first edit saves.
+        const a = t.trim() ? JSON.parse(t) : [];
         const arr = Array.isArray(a) ? a : [];
         lastSynced.current = JSON.stringify(arr);
         setList(arr);
@@ -90,10 +91,21 @@ export default function StartupManager() {
 
   const update = (i: number, patch: Partial<StartupProgram>) =>
     setList((l) => l.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
-  const remove = (i: number) => { setList((l) => l.filter((_, idx) => idx !== i)); setOpenIdx(null); };
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const remove = (i: number) => setConfirm({
+    title: `Remove ${list[i]?.Name || "this program"}?`,
+    body: "It will no longer start when you log in. The program itself stays installed.",
+    confirmLabel: "Remove",
+    onConfirm: () => { setList((l) => l.filter((_, idx) => idx !== i)); setOpenIdx(null); },
+  });
   const add = () => { setList((l) => [...l, { ...EMPTY }]); setOpenIdx(list.length); };
 
   const browse = async (i: number) => { const p = await pickExe(); if (p) update(i, { Path: p }); };
+
+  const label = "mb-1 block text-[12px] font-medium text-text-secondary";
+  const green = "rgb(var(--tone-green-400))";
+  // Read from disk at least once: before that an empty list is not yet known to be empty.
+  const empty = lastSynced.current !== null && list.length === 0;
 
   return (
     <div className="relative flex h-full w-full flex-col">
@@ -101,15 +113,46 @@ export default function StartupManager() {
         {savedFlash && (
           <motion.span
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="absolute right-0 top-0 z-10 flex items-center gap-1 text-xs" style={{ color: "var(--accent)" }}
+            className="absolute right-0 top-0 z-10 flex items-center gap-1 text-[11.5px]" style={{ color: "var(--accent)" }}
           >
-            <Check size={13} /> Saved
+            <Check size={12} /> Saved
           </motion.span>
         )}
       </AnimatePresence>
 
+      {/* What this is, and the way to add to it; the button is the page's one accent action while
+          the list is empty, and a quiet one beside a list. */}
+      <div className="flex shrink-0 items-center gap-3 pb-4 pt-1">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-semibold text-text-primary">Startup</h1>
+          <p className="mt-0.5 text-[12.5px] text-text-muted">Programs that start when you log in, on the days and within the hours you choose.</p>
+        </div>
+        {!empty && lastSynced.current !== null && (
+          <button onClick={add}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-subtle bg-elev px-3 text-[12.5px] text-text-secondary transition-colors hover:border-strong hover:text-text-primary">
+            <Plus size={13} /> New program
+          </button>
+        )}
+      </div>
+
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
-       <div className="divide-y divide-subtle overflow-hidden rounded-xl border border-subtle" style={{ background: "var(--bg-card-glass)" }}>
+       {empty ? (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-subtle px-6 py-12 text-center">
+          <span className="grid size-11 place-items-center rounded-full" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+            <Power size={20} />
+          </span>
+          <div className="flex max-w-sm flex-col gap-1">
+            <span className="text-[13.5px] font-medium text-text-primary">Nothing starts at logon yet</span>
+            <span className="text-[12.5px] leading-relaxed text-text-muted">Add a program, then pick its days and hours. Deck starts it when you log in within that window, and leaves it alone outside it.</span>
+          </div>
+          <button onClick={add}
+            className="mt-1 flex h-8 items-center gap-1.5 rounded-lg px-3.5 text-[12.5px] font-medium text-white transition hover:brightness-110"
+            style={{ background: "var(--accent)" }}>
+            <Plus size={13} /> New program
+          </button>
+        </div>
+       ) : list.length > 0 && (
+       <div className="divide-y divide-subtle overflow-hidden rounded-lg border border-subtle" style={{ background: "var(--bg-card-glass)" }}>
         {list.map((p, i) => {
           const open = openIdx === i;
           const live = launchesNow(p);
@@ -123,41 +166,38 @@ export default function StartupManager() {
               {/* Row header */}
               <button
                 onClick={() => setOpenIdx(open ? null : i)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-elev)]"
+                className="flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-white/5"
               >
                 <span
-                  className="relative h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ background: p.Enabled ? "var(--accent)" : "var(--border-strong)" }}
+                  className="relative size-2 shrink-0 rounded-full"
+                  style={{ background: p.Enabled ? green : "var(--border-strong)" }}
                 >
                   {live && (
-                    <span className="absolute inset-0 animate-ping rounded-full" style={{ background: "var(--accent)" }} />
+                    <span className="absolute inset-0 animate-ping rounded-full" style={{ background: green }} />
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-text-primary">
-                    {p.Name || "(unnamed)"}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={"truncate text-[12.5px] font-medium " + (p.Name ? "text-text-primary" : "text-text-muted")}>
+                      {p.Name || "(unnamed)"}
+                    </span>
+                    {live && (
+                      <span className="shrink-0 rounded-full px-1.5 py-px text-[10.5px]"
+                        style={{ color: green, background: `color-mix(in srgb, ${green} 14%, transparent)` }}>
+                        Would launch now
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-text-muted">
                     {summarizeDays(p.Days)} · {fmtTime(p.Start)}–{fmtTime(p.End)}
-                    {live && <span style={{ color: "var(--accent)" }}> · would launch now</span>}
                   </div>
                 </div>
-                {/* enabled toggle */}
-                <span
-                  role="switch"
-                  aria-checked={p.Enabled}
-                  onClick={(e) => { e.stopPropagation(); update(i, { Enabled: !p.Enabled }); }}
-                  className="relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors"
-                  style={{ background: p.Enabled ? "var(--accent)" : "var(--border-strong)" }}
-                >
-                  <motion.span
-                    layout
-                    className="absolute top-0.5 h-4 w-4 rounded-full bg-[rgb(var(--on-accent-rgb))]"
-                    style={{ left: p.Enabled ? "18px" : "2px" }}
-                  />
+                {/* enabled toggle. Its click stays here, or it would also open the row. */}
+                <span className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <Toggle on={p.Enabled} onChange={(v) => update(i, { Enabled: v })} />
                 </span>
                 <ChevronDown
-                  size={16}
+                  size={15}
                   className="shrink-0 text-text-muted transition-transform"
                   style={{ transform: open ? "rotate(180deg)" : "none" }}
                 />
@@ -174,22 +214,21 @@ export default function StartupManager() {
                   >
                     {/* Editor: constrained column, aligned under the row title. Short fields
                         pair into a 2-col grid (reference style); long path field is full-width. */}
-                    <div className="border-t border-subtle py-4 pl-[38px] pr-4">
+                    <div className="border-t border-subtle py-4 pl-[34px] pr-3.5">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                         <label className="block">
-                          <span className="mb-1 block text-[11px] font-medium text-text-secondary">Name</span>
+                          <span className={label}>Name</span>
                           <TextInput value={p.Name} onChange={(e) => update(i, { Name: e.target.value })} placeholder="Display name" />
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-[11px] font-medium text-text-secondary">Arguments <span className="text-text-muted">· optional</span></span>
-                          <input type="text" value={p.Args.join(" ")}
+                          <span className={label}>Arguments <span className="font-normal text-text-muted">· optional</span></span>
+                          <TextInput type="text" value={p.Args.join(" ")}
                             onChange={(e) => update(i, { Args: e.target.value.split(" ").filter(Boolean) })}
-                            placeholder="Space-separated"
-                            className="h-9 w-full rounded-md border border-strong bg-elev px-3 text-sm text-text-primary placeholder:text-text-muted outline-none transition focus:border-accent" />
+                            placeholder="Space-separated" />
                         </label>
 
                         <label className="col-span-2 block">
-                          <span className="mb-1 block text-[11px] font-medium text-text-secondary">Application</span>
+                          <span className={label}>Application</span>
                           <div className="flex gap-2">
                             <div className="flex-1">
                               <AppCombo
@@ -203,31 +242,31 @@ export default function StartupManager() {
                               />
                             </div>
                             <button onClick={() => browse(i)} title="Browse for .exe"
-                              className="grid h-9 w-10 shrink-0 place-items-center rounded-md border border-strong bg-elev text-text-secondary transition hover:text-text-primary">
-                              <FolderOpen size={16} />
+                              className="grid h-9 w-10 shrink-0 place-items-center rounded-md border border-subtle bg-elev text-text-secondary transition-colors hover:border-strong hover:text-text-primary">
+                              <FolderOpen size={15} />
                             </button>
                           </div>
                         </label>
 
                         <div className="col-span-2">
-                          <span className="mb-1.5 block text-[11px] font-medium text-text-secondary">Active days</span>
+                          <span className={label}>Active days</span>
                           <DayPicker value={p.Days} onChange={(d) => update(i, { Days: d })} />
                         </div>
 
                         <label className="block">
-                          <span className="mb-1 block text-[11px] font-medium text-text-secondary">Start</span>
+                          <span className={label}>Start</span>
                           <TimeInput value={p.Start} onChange={(v) => update(i, { Start: v })} className="w-full" />
                         </label>
                         <label className="block">
-                          <span className="mb-1 block text-[11px] font-medium text-text-secondary">End</span>
+                          <span className={label}>End</span>
                           <TimeInput value={p.End} onChange={(v) => update(i, { End: v })} className="w-full" />
                         </label>
                       </div>
 
                       <div className="mt-4 flex justify-end">
                         <button onClick={() => remove(i)}
-                          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-text-muted transition hover:bg-elev hover:text-danger">
-                          <Trash2 size={14} /> Remove program
+                          className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] text-text-muted transition-colors hover:bg-white/5 hover:text-red-400">
+                          <Trash2 size={13} /> Remove program
                         </button>
                       </div>
                     </div>
@@ -238,15 +277,10 @@ export default function StartupManager() {
           );
         })}
        </div>
+       )}
 
-        {/* Add */}
-        <button
-          onClick={add}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-subtle py-2.5 text-sm text-text-muted transition hover:border-accent hover:text-text-primary"
-        >
-          <Plus size={16} /> New program
-        </button>
       </div>
+      <ConfirmDialog state={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }
