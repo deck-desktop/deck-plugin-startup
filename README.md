@@ -3,6 +3,8 @@
 Programs that start when you log in, each on the days and within the hours you choose. Open it
 from the **+** beside your tabs and choose **Startup**.
 
+![Startup](docs/screenshot.png)
+
 - **Programs**: search your installed apps, type a path (`%VARS%` such as `%LOCALAPPDATA%` work),
   or browse for an `.exe`, with optional arguments.
 - **Active days** and a **start and end time** for each. Outside that window the program is
