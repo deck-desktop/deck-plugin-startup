@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Plus, Trash2, FolderOpen, Check, Power } from "lucide-react";
 import {
   configRead, configWrite, pickExe, listInstalled,
-  type StartupProgram, type AppProc,
+  type StartupProgram, type AppProc, isWindows,
 } from "../shim/bridge.js";
 import { TextInput, TimeInput, DayPicker, Toggle, ConfirmDialog, type ConfirmState } from "../shim/ui.js";
 import { AppCombo } from "./AppCombo";
@@ -241,7 +241,7 @@ export default function StartupManager() {
                                 placeholder="Search installed apps or type a path…"
                               />
                             </div>
-                            <button onClick={() => browse(i)} title="Browse for .exe"
+                            <button onClick={() => browse(i)} title={isWindows() ? "Browse for .exe" : "Browse for a program"}
                               className="grid h-9 w-10 shrink-0 place-items-center rounded-md border border-subtle bg-elev text-text-secondary transition-colors hover:border-strong hover:text-text-primary">
                               <FolderOpen size={15} />
                             </button>
